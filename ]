@@ -29,16 +29,15 @@ typeSyntax = sepBy (subTree <|> typeName <|> typeValue) (symbol "->")
 
 typeApplySentence :: Parser [TypeTree]
 typeApplySentence 
-  = (:[]) . Apply <$> many1 (try $ parens typeApplySentence) <|> typeSyntax
+  = try ((:[]) . Apply <$> many1 (parens typeApplySentence)) <|> typeSyntax
 
 --------
 
 main :: IO ()
 main = do
-   parseTest (typeApplySentence >>= \res -> eof >> return res) "a -> b -> a"
-   parseTest (typeApplySentence >>= \res -> eof >> return res) "a -> b c -> a"
-   parseTest (typeApplySentence >>= \res -> eof >> return res) "((a -> b) (a -> c)) (c -> d)"
-   parseTest (typeApplySentence >>= \res -> eof >> return res)  "((a -> b) -> (a -> c))(c -> d)" --NG
+   parseTest typeApplySentence "a -> b -> a"
+   parseTest typeApplySentence "((a -> b) (a -> c)) (c -> d)"
+   parseTest typeApplySentence "((a -> b) -> (a -> c))(c -> d)"
 
    --parseTest typeSyntax "a -> b -> a"
    --parseTest typeSyntax "Hoge -> piyo -> Huga"
