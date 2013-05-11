@@ -20,6 +20,8 @@ data TypeSentence a
   = TApply [TypeSentence a] 
   | TTree [TypeTree a] deriving (Show, Eq, Functor)
 
+type Names = (String, String)
+
 -------------------------------------------------------------------------------
 -- Parser
 -------------------------------------------------------------------------------
@@ -63,11 +65,45 @@ many1 p = (:) <$> p <*> many p
 -------------------------------------------------------------------------------
 -- アルファ変換／ベータ簡約
 
-alpha :: TypeSentence a -> TypeSentence a -> TypeSentence a
-alpha = undefined
+typeInference :: Maybe (TypeSentence String) -> Maybe [TypeTree Names]
+typeInference tree = do
+     names <- fmap concatSentence $ fmap toPare <$> tree
+     return $ (filter isTypeValue names)
 
-beta :: TypeSentence a -> Either (TypeSentence a) (TypeSentence a)
+--------
+
+alpha :: TypeSentence Names -> [TypeTree Names] -> TypeTree Names 
+alpha l r = let
+  sentence = filter isTypeValue $ concatSentence l
+  typeNames = filter isTypeValue $ concatTree r
+  in undefined
+
+beta :: TypeSentence Names -> Either (TypeSentence Names) (TypeSentence Names)
 beta = undefined
+
+-------------------------------------------------------------------------------
+-- Helper functions
+-------------------------------------------------------------------------------
+
+concatTree :: [TypeTree a] -> [TypeTree a]
+concatTree = concatMap f
+  where
+    f :: TypeTree a -> [TypeTree a]
+    f (SubTree t) = t 
+    f x = [x]
+
+concatSentence :: TypeSentence a -> [TypeTree a]
+concatSentence (TApply xs) = concatMap concatSentence xs
+concatSentence (TTree t) = concatTree t
+
+isTypeValue :: TypeTree a -> Bool
+isTypeValue (TypeValue _) = True
+isTypeValue _ = False
+
+--------
+
+toPare :: a -> (a, a)
+toPare a = (a, a)
 
 -------------------------------------------------------------------------------
 -- Main
@@ -75,17 +111,5 @@ beta = undefined
 
 main :: IO ()
 main = do
-   putStrLn "--------------------------------------"
-   t "a -> b -> a"
-   t "a -> b c -> a"
-   t "{{a -> b} {a -> c}} {c -> d}"
-   t "{(a -> b) -> (a -> c)} {c -> d}"
-   t "{(a -> b) -> (a -> c) -> a -> c} {c -> d}"
-   t "{(a -> b) -> (a -> c) -> c} {c -> d}"
-   t "{(a -> b) (a -> c) c} {c -> d}"
-
-   putStrLn "--------------------------------------"
-   x <- parseTypeSentence "c -> a b -> b"
-   print x
-     where
-       t = parseTest (typeApplySentence <* eof) 
+  putStrLn "--------------------------------------"
+  print . typeInference =<< parseTypeSentence "{a -> Hoge -> Piyo} {Huga -> b}"
