@@ -1,44 +1,77 @@
-import Text.Trifecta
-import Control.Applicative
+{-# LANGUAGE DeriveFunctor #-}
+module Main where
 
-data TypeTree 
-  = TypeName String
-  | TypeValue String
-  | SubTree [TypeTree]
-  | Apply [[TypeTree]]
-  deriving (Show, Read, Eq)
+import Data.Monoid
+import Data.ByteString.UTF8 as UTF8
+import Control.Applicative
+import Text.Trifecta
+
+-------------------------------------------------------------------------------
+-- Types
+-------------------------------------------------------------------------------
+
+data TypeTree a
+  = TypeName a
+  | TypeValue a
+  | SubTree [TypeTree a]
+  deriving (Show, Read, Eq, Functor)
+
+data TypeSentence a 
+  = TApply [TypeSentence a] 
+  | TTree [TypeTree a] deriving (Show, Eq, Functor)
+
+-------------------------------------------------------------------------------
+-- Parser
+-------------------------------------------------------------------------------
+
+--parse実行
+parseTypeSentence :: String -> IO (Maybe (TypeSentence String))
+parseTypeSentence s 
+  = case parseByteString (typeApplySentence <* eof) mempty (UTF8.fromString s) of
+    Failure xs -> print xs >> return Nothing
+    Success a  -> return $ Just a
+
+--------
+
+typeName :: Parser (TypeTree String)
+typeName = TypeName <$> word ((:) <$> upper <*> many letter)
+
+typeValue :: Parser (TypeTree String)
+typeValue = TypeValue <$> word (many1 letter)
+
+subTree :: Parser (TypeTree String)
+subTree = SubTree <$> word (parens typeSyntax)
+
+typeSyntax :: Parser [TypeTree String]
+typeSyntax = sepBy (subTree <|> typeName <|> typeValue) (symbol "->")
+
+typeApplySentence :: Parser (TypeSentence String)
+typeApplySentence 
+  = TApply <$> many1 (braces typeApplySentence) <|> TTree <$> typeSyntax
 
 --------
 
 --こういうのなんかありそう
 word :: Parser a -> Parser a
-word p = spaces >> p >>= \res -> spaces >> return res
+word p = spaces *> p  <* spaces
 
 many1 :: Parser a -> Parser [a]
 many1 p = (:) <$> p <*> many p
 
---------
+-------------------------------------------------------------------------------
+-- Type inference
+-------------------------------------------------------------------------------
+-- アルファ変換／ベータ簡約
 
-typeName :: Parser TypeTree
-typeName = TypeName <$> word ((:) <$> upper <*> many letter)
+alpha :: TypeSentence a -> TypeSentence a -> TypeSentence a
+alpha = undefined
 
-typeValue :: Parser TypeTree
-typeValue = TypeValue <$> word (many1 letter)
+beta :: TypeSentence a -> Either (TypeSentence a) (TypeSentence a)
+beta = undefined
 
-subTree :: Parser TypeTree
-subTree = SubTree <$> word (parens typeSyntax)
-
-typeSyntax :: Parser [TypeTree]
-typeSyntax = sepBy (subTree <|> typeName <|> typeValue) (symbol "->")
-
-typeApplySentence :: Parser [TypeTree]
-typeApplySentence 
-  = (:[]) . Apply <$> many1 (braces typeApplySentence) <|> typeSyntax
-
-parseTypeSentence :: String -> [TypeTree]
-parseTypeSentence = undefined
-
---------
+-------------------------------------------------------------------------------
+-- Main
+-------------------------------------------------------------------------------
 
 main :: IO ()
 main = do
@@ -50,5 +83,9 @@ main = do
    t "{(a -> b) -> (a -> c) -> a -> c} {c -> d}"
    t "{(a -> b) -> (a -> c) -> c} {c -> d}"
    t "{(a -> b) (a -> c) c} {c -> d}"
+
+   putStrLn "--------------------------------------"
+   x <- parseTypeSentence "c -> a b -> b"
+   print x
      where
-       t = parseTest (typeApplySentence >>= \res -> eof >> return res) 
+       t = parseTest (typeApplySentence <* eof) 
