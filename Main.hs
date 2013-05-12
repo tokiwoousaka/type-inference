@@ -4,10 +4,10 @@ module Main where
 import Data.List
 import Data.Maybe
 import Data.Monoid
-import Data.ByteString.UTF8 as UTF8
 import Control.Applicative
 import Control.Monad.State
 import Text.Trifecta
+import qualified Data.ByteString.UTF8 as UTF8
 
 -------------------------------------------------------------------------------
 -- Types
@@ -82,12 +82,16 @@ beta = undefined
 -- アルファ変換
 --------
 
-alpha :: TypeSentence Names -> [TypeTree Names] -> [TypeTree Names]
-alpha l r = let
-  sentence = nub . allVariables $ concatSentence l
-  typeNames = nub . allVariables $ concatTree r
-  in undefined 
+alpha :: TypeSentence Names -> [TypeTree Names] -> TypeSentence Names
+alpha typeSentence deduceTree = let
+  sentence = map saveName (nub . allVariables $ concatSentence typeSentence)
+  typeNames = nub . allVariables $ concatTree deduceTree
+  transformed = snd $ runState (transNames typeNames) sentence
+  in foldl (.) id (map (uncurry replaceNameForSentence) transformed) typeSentence
     where 
+      saveName :: Names -> Names
+      saveName (_, x) = (x, x)
+
       allVariables :: [TypeTree a] -> [a]
       allVariables = concatMap tree2Variable 
      
@@ -112,8 +116,12 @@ transNames xs = do
       newNames :: String -> [String]
       newNames s = s : zipWith (++) (repeat s) (map show [0..])
 
+replaceNameForSentence :: String -> String -> TypeSentence Names -> TypeSentence Names
+replaceNameForSentence x y (TApply ts) = TApply $ map (replaceNameForSentence x y) ts
+replaceNameForSentence x y (TTree ts) = TTree $ map (fmapOf (nameEq $ toPare x) (fmap $ const y)) ts
+
 replaceName :: Names -> Names -> [Names] -> [Names]
-replaceName x y = replaceFOf (nameEq x) x y
+replaceName x y = replaceFOf (nameEq x) x y --TODO このreplaceFOfはやめた方が良いkgs
 
 nameEq :: Names -> Names -> Bool
 nameEq x y = snd $ (==) <$> x <*> y
@@ -145,8 +153,12 @@ toPare a = (a, a)
 mapZip :: (a -> b) -> [a] -> [(a, b)]
 mapZip f = map ((,) <*> f)
 
-replaceFOf :: (Eq a, Functor f) => (a -> Bool) -> a -> a -> f a -> f a
+-- これなんか使い勝手良くないから消す
+replaceFOf ::  Functor f => (a -> Bool) -> a -> a -> f a -> f a
 replaceFOf f x y = fmap (\z -> if f x then y else z)
+
+fmapOf :: Functor f => (a -> Bool) -> (a -> a) -> f a -> f a 
+fmapOf f1 f2 = fmap (\y -> if f1 y then f2 y else y)
 
 -------------------------------------------------------------------------------
 -- Main
