@@ -88,10 +88,12 @@ alpha = undefined
 
 --------
 
-makeNewName :: [Names] -> Names -> Names 
+--replaceNewName 
+
+makeNewName :: [Names] -> Names -> (String, String)
 makeNewName xs (y1, y2) = let 
   comped = mapZip (`elem` map snd xs) (newNames y1) :: [(String, Bool)]
-  in (y1, fromMaybe y2 (fst <$> find (snd . fmap (/=True)) comped))
+  in (,) y2 $ fromMaybe y2 (fst <$> find (snd . fmap (/=True)) comped)
 
 newNames :: String -> [String]
 newNames s = s : zipWith (++) (repeat s) (map show [0..])
